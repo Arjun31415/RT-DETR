@@ -4,10 +4,11 @@
 import copy
 import torch 
 import torch.nn as nn 
-import torch.nn.functional as F 
+import torch.nn.functional as F
 
 from .utils import get_activation
-
+from .linear_attention import LinearSelfAttention
+from .linear_attention import ConvertToSingle
 from src.core import register
 
 
@@ -115,8 +116,8 @@ class CSPRepLayer(nn.Module):
 # transformer
 class TransformerEncoderLayer(nn.Module):
     def __init__(self,
-                 d_model,
-                 nhead,
+                 d_model:int,
+                 nhead:int,
                  dim_feedforward=2048,
                  dropout=0.1,
                  activation="relu",
@@ -124,8 +125,12 @@ class TransformerEncoderLayer(nn.Module):
         super().__init__()
         self.normalize_before = normalize_before
 
-        self.self_attn = nn.MultiheadAttention(d_model, nhead, dropout, batch_first=True)
-
+        # Change to linearly separable thing
+        self.convert=ConvertToSingle()
+        # self.self_attn = nn.MultiheadAttention(d_model, nhead, dropout, batch_first=True)
+        # print("nhead: ",nhead)
+        # print("dmodel: ",d_model) 
+        self.self_attn = LinearSelfAttention(d_model,dropout,bias=True)
         self.linear1 = nn.Linear(d_model, dim_feedforward)
         self.dropout = nn.Dropout(dropout)
         self.linear2 = nn.Linear(dim_feedforward, d_model)
@@ -145,7 +150,9 @@ class TransformerEncoderLayer(nn.Module):
         if self.normalize_before:
             src = self.norm1(src)
         q = k = self.with_pos_embed(src, pos_embed)
-        src, _ = self.self_attn(q, k, value=src, attn_mask=src_mask)
+        # print(q.shape,k.shape,src.shape)
+        x= self.convert(q,k,src)
+        src, _ = self.self_attn(x, attn_mask=src_mask)
 
         src = residual + self.dropout1(src)
         if not self.normalize_before:

@@ -13,7 +13,8 @@ import torch.nn.init as init
 from .denoising import get_contrastive_denoising_training_group
 from .utils import deformable_attention_core_func, get_activation, inverse_sigmoid
 from .utils import bias_init_with_prob
-
+from .linear_attention import LinearSelfAttention
+from .linear_attention import ConvertToSingle
 
 from src.core import register
 
@@ -154,7 +155,13 @@ class TransformerDecoderLayer(nn.Module):
         super(TransformerDecoderLayer, self).__init__()
 
         # self attention
-        self.self_attn = nn.MultiheadAttention(d_model, n_head, dropout=dropout, batch_first=True)
+        self.convert=ConvertToSingle()
+        # self.self_attn = nn.MultiheadAttention(d_model, nhead, dropout, batch_first=True)
+        # print("nhead: ",nhead)
+        # print("dmodel: ",d_model) 
+        self.self_attn = LinearSelfAttention(d_model,dropout,bias=True)
+
+        # self.self_attn = nn.MultiheadAttention(d_model, n_head, dropout=dropout, batch_first=True)
         self.dropout1 = nn.Dropout(dropout)
         self.norm1 = nn.LayerNorm(d_model)
 
