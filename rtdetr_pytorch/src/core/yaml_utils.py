@@ -45,14 +45,14 @@ def extract_schema(cls: type):
     num_defualts = len(argspec.defaults) if argspec.defaults is not None else 0
     num_requires = len(arg_names) - num_defualts
 
-    schame = dict()
-    schame['_name'] = cls.__name__
-    schame['_pymodule'] = importlib.import_module(cls.__module__)
-    schame['_inject'] = getattr(cls, '__inject__', [])
-    schame['_share'] = getattr(cls, '__share__', [])
+    schema = dict()
+    schema['_name'] = cls.__name__
+    schema['_pymodule'] = importlib.import_module(cls.__module__)
+    schema['_inject'] = getattr(cls, '__inject__', [])
+    schema['_share'] = getattr(cls, '__share__', [])
 
     for i, name in enumerate(arg_names):
-        if name in schame['_share']:
+        if name in schema['_share']:
             assert i >= num_requires, 'share config must have default value.'
             value = argspec.defaults[i - num_requires]
         
@@ -62,9 +62,9 @@ def extract_schema(cls: type):
         else:
             value = None 
 
-        schame[name] = value
+        schema[name] = value
         
-    return schame
+    return schema
 
 
 

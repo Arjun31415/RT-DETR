@@ -16,6 +16,7 @@ import torch.amp
 
 from src.data import CocoEvaluator
 from src.misc import (MetricLogger, SmoothedValue, reduce_dict)
+# from torch.profiler import profile, record_function, ProfilerActivity
 
 
 def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
@@ -31,24 +32,27 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
     
     ema = kwargs.get('ema', None)
     scaler = kwargs.get('scaler', None)
-
+    # i = 0
     for samples, targets in metric_logger.log_every(data_loader, print_freq, header):
+        # with profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],record_shapes=True) as prof:
+
         samples = samples.to(device)
         targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
 
         if scaler is not None:
             with torch.autocast(device_type=str(device), cache_enabled=True):
                 outputs = model(samples, targets)
-            
+
             with torch.autocast(device_type=str(device), enabled=False):
                 loss_dict = criterion(outputs, targets)
 
             loss = sum(loss_dict.values())
             scaler.scale(loss).backward()
-            
+
             if max_norm > 0:
                 scaler.unscale_(optimizer)
-                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm)
+                torch.nn.utils.clip_grad_norm_(
+                    model.parameters(), max_norm)
 
             scaler.step(optimizer)
             scaler.update()
@@ -57,17 +61,18 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
         else:
             outputs = model(samples, targets)
             loss_dict = criterion(outputs, targets)
-            
+
             loss = sum(loss_dict.values())
             optimizer.zero_grad()
             loss.backward()
-            
+
             if max_norm > 0:
-                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm)
+                torch.nn.utils.clip_grad_norm_(
+                    model.parameters(), max_norm)
 
             optimizer.step()
-        
-        # ema 
+
+        # ema
         if ema is not None:
             ema.update(model)
 
@@ -81,12 +86,16 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
 
         metric_logger.update(loss=loss_value, **loss_dict_reduced)
         metric_logger.update(lr=optimizer.param_groups[0]["lr"])
+        # i += 1
+        # if (i % 100 == 0):
+        #     break
+        # metric_logger.update(class_error=loss_dict_reduced['class_error'])
 
     # gather the stats from all processes
+    # prof.export_chrome_trace("output/trace.json")
     metric_logger.synchronize_between_processes()
-    print("Averaged stats:", metric_logger)
+    # print("Averaged stats:", metric_logger)
     return {k: meter.global_avg for k, meter in metric_logger.meters.items()}
-
 
 
 @torch.no_grad()
@@ -185,6 +194,3 @@ def evaluate(model: torch.nn.Module, criterion: torch.nn.Module, postprocessors,
     #     stats['PQ_st'] = panoptic_res["Stuff"]
 
     return stats, coco_evaluator
-
-
-
